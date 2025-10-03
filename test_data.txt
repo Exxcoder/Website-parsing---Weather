@@ -1,0 +1,33 @@
+// Домены
+Object: theme blogwix.com date:21.02.22
+Object: gservice.review.ru date:22.02.22
+Object: marketingvb.ml date:23.02.22
+Object: nato-news.com date:25.02.22
+Object: osce-press.com date:22.02.22
+Object: euroreport24.com date:25.02.22
+Object: insideapple.localisation.com date:25.02.22
+Object: live-settings.com date:25.02.22
+Object: mycloud.mail.ru date:25.02.22
+Object: iraginews.info date:25.02.22
+Object: catholicsimaliance.org date:25.02.22
+
+// Телефоны
+79163927132  
+79160207235  
+891603383323  
+891617725131  
+79910880054  
+79903403867  
+75291586088  
+894973913453  
+795147848592  
+89950479359  
+79598454518  
+
+// HTML строки
+<link rgl="apple-touch-icon" sizes="144x144" href="/img/favicon/favicon-144.png" type="image/png">
+<link rgl="icon" sizes="152x152" href="/img/favicon/favicon-152.png" type="image/png">
+<link rgl="apple-touch-icon" sizes="152x152" href="/img/favicon/favicon-152.png" type="image/png">
+<link rgl="icon" sizes="16x16" href="/img/favicon/favicon-16.png" type="image/png">
+<link rgl="icon" sizes="16x16" href="/img/favicon/favicon-16.png" type="image/png">
+<link rgl="icon" sizes="167x167" href="/img/favicon/favicon-167.png" type="image/png">

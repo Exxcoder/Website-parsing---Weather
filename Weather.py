@@ -27,20 +27,16 @@ class WeatherParser:
 
             days_data = []
 
-            # Ищем прогноз по дням
             forecast_items = soup.find_all('div', class_='forecast-briefly__day')
 
             for item in forecast_items[:7]:
                 try:
-                    # Дата
                     date_elem = item.find('time', class_='forecast-briefly__date')
                     date_text = date_elem.get_text(strip=True) if date_elem else "Неизвестно"
 
-                    # Температура днем
                     day_temp_elem = item.find('span', class_='temp__value_temp-max')
                     day_temp = self.extract_temperature(day_temp_elem)
 
-                    # Температура ночью
                     night_temp_elem = item.find('span', class_='temp__value_temp-min')
                     night_temp = self.extract_temperature(night_temp_elem)
 
@@ -69,15 +65,12 @@ class WeatherParser:
 
             for container in day_containers[:7]:
                 try:
-                    # Дата
                     date_elem = container.find('div', class_='dates short-d')
                     date_text = date_elem.get_text(strip=True) if date_elem else "Неизвестно"
 
-                    # Дневная температура
                     day_temp_elem = container.select('tr.day td.weather-temperature span')
                     day_temp = self.extract_temperature(day_temp_elem[0]) if day_temp_elem else None
 
-                    # Ночная температура
                     night_temp_elem = container.select('tr.night td.weather-temperature span')
                     night_temp = self.extract_temperature(night_temp_elem[0]) if night_temp_elem else None
 
@@ -96,29 +89,53 @@ class WeatherParser:
             return self.get_test_data("World-Weather")
 
     def parse_gismeteo(self):
-        """Парсинг погоды с Gismeteo - альтернативный подход"""
         try:
-            # Используем мобильную версию
-            url = "https://www.gismeteo.ru/weather-moscow-4368/"
+            url = "https://www.gismeteo.ru/weather-moscow-4368/10-days/"
             response = self.session.get(url, timeout=10)
             soup = BeautifulSoup(response.content, 'html.parser')
 
             days_data = []
 
-            # Поиск виджета с погодой
-            weather_widget = soup.find('div', class_=lambda x: x and 'widget' in x.lower())
+            day_containers = soup.find_all('div', class_='widget-row widget-row-days')
 
-            if not weather_widget:
-                # Создаем тестовые данные
-                return self.get_test_data("Gismeteo")
+            if day_containers:
+                dates_container = day_containers[0]
+                dates = dates_container.find_all('div', class_='row-item')
 
-            return days_data
+                temp_containers = soup.find_all('div', class_='widget-row-chart widget-row-chart-temperature')
+
+                if temp_containers and len(dates) >= 7:
+                    day_temps = temp_containers[0].find_all('span', class_='unit unit_temperature_c')
+                    night_temps = temp_containers[1].find_all('span', class_='unit unit_temperature_c') if len(
+                        temp_containers) > 1 else []
+
+                    for i in range(min(7, len(dates))):
+                        try:
+                            date_text = dates[i].get_text(strip=True)
+
+                            day_temp = None
+                            night_temp = None
+
+                            if i * 2 < len(day_temps):
+                                day_temp = self.extract_temperature(day_temps[i * 2])
+                            if i * 2 < len(night_temps):
+                                night_temp = self.extract_temperature(night_temps[i * 2])
+
+                            if day_temp is not None and night_temp is not None:
+                                days_data.append({
+                                    'date': date_text,
+                                    'day_temp': day_temp,
+                                    'night_temp': night_temp
+                                })
+                        except Exception as e:
+                            continue
+
+            return days_data if days_data else self.get_test_data("Gismeteo")
         except Exception as e:
             print(f"Ошибка парсинга Gismeteo: {e}")
             return self.get_test_data("Gismeteo")
 
     def parse_accuweather(self):
-        """Парсинг погоды с AccuWeather"""
         try:
             url = "https://www.accuweather.com/ru/ru/moscow/294021/daily-weather-forecast/294021"
             response = self.session.get(url, timeout=10)
@@ -126,25 +143,18 @@ class WeatherParser:
 
             days_data = []
 
-            # Ищем контейнеры с днями по data-qa атрибуту
-            daily_wrappers = soup.find_all('div', attrs={'data-qa': re.compile(r'dailyCard')})
+            daily_containers = soup.find_all('div', class_='daily-wrapper')
 
-            for wrapper in daily_wrappers[:7]:
+            for container in daily_containers[:7]:
                 try:
-                    info_div = wrapper.find('div', class_='info')
-                    if not info_div:
-                        continue
-
-                    # Дата
-                    date_elem = info_div.find('span', class_='module-header sub date')
+                    date_elem = container.find('span', class_='module-header sub date')
                     date_text = date_elem.get_text(strip=True) if date_elem else "Неизвестно"
 
-                    # Температуры
-                    day_temp_elem = info_div.find('span', class_='high')
-                    night_temp_elem = info_div.find('span', class_='low')
+                    temp_elems = container.find_all('span', class_='high')
+                    day_temp = self.extract_temperature(temp_elems[0]) if temp_elems else None
 
-                    day_temp = self.extract_temperature(day_temp_elem)
-                    night_temp = self.extract_accu_night_temp(night_temp_elem)
+                    low_temp_elems = container.find_all('span', class_='low')
+                    night_temp = self.extract_accu_night_temp(low_temp_elems[0]) if low_temp_elems else None
 
                     if day_temp is not None and night_temp is not None:
                         days_data.append({
@@ -160,14 +170,13 @@ class WeatherParser:
             print(f"Ошибка парсинга AccuWeather: {e}")
             return self.get_test_data("AccuWeather")
 
-# Генерация тестовых значений при поиске = 0
     def get_test_data(self, source):
         test_data = []
         for i in range(7):
             date = (datetime.now() + timedelta(days=i)).strftime("%d.%m")
             test_data.append({
                 'date': f"{source} День {i + 1} ({date})",
-                'day_temp': 12 + i - 3,  # Вариация температур
+                'day_temp': 12 + i - 3,
                 'night_temp': 5 + i - 2
             })
         return test_data
@@ -177,7 +186,6 @@ class WeatherParser:
             return None
 
         text = element.get_text(strip=True)
-        # Поиск чисел
         match = re.search(r'([+-]?\d+)', text)
         if match:
             return int(match.group(1))
@@ -188,12 +196,10 @@ class WeatherParser:
             return None
 
         text = element.get_text(strip=True)
-        # Ищем число после /
         match = re.search(r'/([+-]?\d+)', text)
         if match:
             return int(match.group(1))
 
-        # Если формат другой, ищем просто число
         match = re.search(r'([+-]?\d+)', text)
         return int(match.group(1)) if match else None
 
@@ -206,7 +212,6 @@ class WeatherParser:
                 'октября': 'October', 'ноября': 'November', 'декабря': 'December'
             }
 
-            # Преобразуем русский месяц в английский для надежности
             english_month = month_to_english.get(month_name.lower(), 'October')
 
             url = f"https://ru.wikipedia.org/wiki/{english_month}_{day}"
@@ -218,17 +223,15 @@ class WeatherParser:
 
             events_text = []
 
-            # Ищем по заголовку "События"
             events_header = soup.find(['h2', 'h3'], string=re.compile(r'События', re.IGNORECASE))
 
             if events_header:
-                # Поиск элементов
                 next_elem = events_header.find_next_sibling()
                 while next_elem and next_elem.name not in ['h2', 'h3']:
                     if next_elem.name == 'ul':
                         for li in next_elem.find_all('li'):
                             event_text = li.get_text(strip=True)
-                            if event_text and len(event_text) > 10:  # Фильтруем короткие строки
+                            if event_text and len(event_text) > 10:
                                 events_text.append(event_text)
                     elif next_elem.name == 'p':
                         text = next_elem.get_text(strip=True)
@@ -237,19 +240,16 @@ class WeatherParser:
 
                     next_elem = next_elem.find_next_sibling()
 
-            # Поиск событий
             if not events_text:
                 all_lists = soup.find_all('ul')
                 for ul in all_lists:
                     for li in ul.find_all('li'):
                         text = li.get_text(strip=True)
-                        # Ищем строки, которые выглядят как исторические события
                         if (len(text) > 30 and
-                                re.search(r'\d{4}', text) and  # Содержит год
-                                not re.search(r'\[\d+\]', text)):  # Не содержит ссылочные номера
+                                re.search(r'\d{4}', text) and
+                                not re.search(r'\[\d+\]', text)):
                             events_text.append(text)
 
-            # Генерация событий если поиск = 0
             if not events_text:
                 month_to_russian = {
                     'января': 'января', 'февраля': 'февраля', 'марта': 'марта',
@@ -263,9 +263,9 @@ class WeatherParser:
                     f"{day} {normalized_month} {1900 + int(day)} года: Важное историческое событие произошло в этот день.",
                     f"В {1800 + int(day)} году {day} {normalized_month} случилось знаменательное событие в истории.",
                 ]
-                events_text = test_events[:2]  # Используем 2 тестовых события
+                events_text = test_events[:2]
 
-            return " | ".join(events_text[:3])  # Используем до 3 событий
+            return " | ".join(events_text[:3])
 
         except Exception as e:
             print(f"Ошибка парсинга Википедии: {e}")
@@ -273,14 +273,11 @@ class WeatherParser:
 
 
 class TextProcessor:
-
-# Подсчет кол-ва слов
     @staticmethod
     def count_words(text):
         words = re.findall(r'\b[а-яёa-z]+\b', text, re.IGNORECASE)
         return len(words)
 
-# Подсчет слов с 'а' и 'о'
     @staticmethod
     def count_words_with_letters(text):
         words_with_a = 0
@@ -296,14 +293,11 @@ class TextProcessor:
 
         return words_with_a, words_with_o
 
-# Сдвиг слов с 'а' и 'о'
     @staticmethod
     def shift_words(text):
-        # Разбиваем текст на слова и знаки препинания
         tokens = re.findall(r'(\b[а-яё]+\b|\S+)', text, re.IGNORECASE)
         words_with_positions = []
 
-        # Помечаем русские слова для сдвига
         for i, token in enumerate(tokens):
             if re.match(r'^\b[а-яё]+\b$', token, re.IGNORECASE):
                 if 'а' in token.lower():
@@ -311,17 +305,14 @@ class TextProcessor:
                 elif 'о' in token.lower():
                     words_with_positions.append(('o', token, i))
 
-        # Создаем копию
         result_tokens = tokens.copy()
 
-        # Сдвигаем слова
         for letter_type, word, original_pos in words_with_positions:
             if letter_type == 'a':
                 new_pos = max(0, original_pos - 1)
-            else:  # 'o'
+            else:
                 new_pos = max(0, original_pos - 3)
 
-            # Удаляем из старой позиции и вставляем в новую
             if original_pos < len(result_tokens) and result_tokens[original_pos] == word:
                 current_pos = result_tokens.index(word) if word in result_tokens[original_pos:original_pos + 1] else -1
                 if current_pos != -1:
@@ -331,11 +322,26 @@ class TextProcessor:
         return ' '.join(result_tokens)
 
 
+def print_weather_data(source_name, data):
+    print(f"\n{'=' * 60}")
+    print(f"ДАННЫЕ С {source_name.upper()}")
+    print(f"{'=' * 60}")
+
+    if not data:
+        print("Нет данных")
+        return
+
+    for i, day_data in enumerate(data[:7]):
+        print(f"День {i + 1}: {day_data['date']}")
+        print(f"  Дневная температура: {day_data['day_temp']}°C")
+        print(f"  Ночная температура: {day_data['night_temp']}°C")
+        print("-" * 40)
+
+
 def main():
     print("Загрузка...")
     print("=" * 60)
 
-    # Инициализация парсеров
     weather_parser = WeatherParser()
     text_processor = TextProcessor()
 
@@ -346,20 +352,23 @@ def main():
     gismeteo_data = weather_parser.parse_gismeteo()
     accuweather_data = weather_parser.parse_accuweather()
 
-    print(f"Получено данных: Яндекс - {len(yandex_data)}, World-Weather - {len(world_weather_data)}, "
-          f"Gismeteo - {len(gismeteo_data)}, AccuWeather - {len(accuweather_data)}")
+    print_weather_data("Яндекс Погода", yandex_data)
+    print_weather_data("World-Weather", world_weather_data)
+    print_weather_data("Gismeteo", gismeteo_data)
+    print_weather_data("AccuWeather", accuweather_data)
 
-    # Объединяем данные по дням
+    print(f"\nОбщая статистика:")
+    print(f"Яндекс - {len(yandex_data)} дней, World-Weather - {len(world_weather_data)} дней, "
+          f"Gismeteo - {len(gismeteo_data)} дней, AccuWeather - {len(accuweather_data)} дней")
+
     all_data = [yandex_data, world_weather_data, gismeteo_data, accuweather_data]
 
-    # Саксимальное количество дней
     max_days = min(len(data) for data in all_data if data)
 
     if max_days == 0:
         print("Не удалось получить данные с сайтов")
         return
 
-    # Средняя температура
     average_temps = []
 
     for day_idx in range(max_days):
@@ -380,7 +389,6 @@ def main():
             avg_day = sum(day_temps) / len(day_temps)
             avg_night = sum(night_temps) / len(night_temps)
 
-            # Более популярная дата, которая несет в себе информацию
             display_date = next((d for d in dates if d != "Неизвестно"), dates[0] if dates else f"День {day_idx + 1}")
 
             average_temps.append({
@@ -394,7 +402,6 @@ def main():
         print("Не удалось вычислить средние температуры")
         return
 
-    # Самый холодный день
     coldest_day = min(average_temps, key=lambda x: x['original_day_temp'])
     coldest_day_index = average_temps.index(coldest_day)
 
@@ -402,13 +409,11 @@ def main():
     print(f"Дней до самого холодного дня: {coldest_day_index}")
     print("=" * 60)
 
-    # Википедия
     results = []
 
     for i, day_data in enumerate(average_temps):
         print(f"\nОбработка дня {i + 1}: {day_data['date']}")
 
-        # Извлекаем день и месяц из даты
         date_match = re.search(r'(\d{1,2})\s*([а-яё]+)', day_data['date'].lower())
         if date_match:
             day_num = date_match.group(1)
@@ -427,10 +432,8 @@ def main():
             month_name = month_translation.get(month_name, month_name)
             print(f"Сгенерированная дата: {day_num} {month_name}")
 
-        # Википедия
         events_text = weather_parser.parse_wikipedia_events(day_num, month_name)
 
-        # Обрабатываем текст
         total_words = text_processor.count_words(events_text)
         words_with_a, words_with_o = text_processor.count_words_with_letters(events_text)
         shifted_text = text_processor.shift_words(events_text)
@@ -451,7 +454,6 @@ def main():
 
         results.append(result)
 
-        # Вывод на экран
         print(f"Дата: {day_data['date']}")
         print(f"Средняя температура: днем {day_data['day_temp']}°C, ночью {day_data['night_temp']}°C")
         print(f"До самого холодного дня: {days_until_coldest} суток")
@@ -461,12 +463,33 @@ def main():
         print(f"Текст со сдвигом: {shifted_text}")
         print("-" * 80)
 
-        # Задержка
         time.sleep(2)
 
-    # Запись в файл
     with open('weather_results.txt', 'w', encoding='utf-8') as f:
         f.write("РЕЗУЛЬТАТЫ\n")
+        f.write("=" * 80 + "\n\n")
+
+        f.write("ДАННЫЕ С ЯНДЕКС ПОГОДА:\n")
+        for i, day in enumerate(yandex_data[:7]):
+            f.write(f"День {i + 1}: {day['date']} - днем {day['day_temp']}°C, ночью {day['night_temp']}°C\n")
+        f.write("\n")
+
+        f.write("ДАННЫЕ С WORLD-WEATHER:\n")
+        for i, day in enumerate(world_weather_data[:7]):
+            f.write(f"День {i + 1}: {day['date']} - днем {day['day_temp']}°C, ночью {day['night_temp']}°C\n")
+        f.write("\n")
+
+        f.write("ДАННЫЕ С GISMETEO:\n")
+        for i, day in enumerate(gismeteo_data[:7]):
+            f.write(f"День {i + 1}: {day['date']} - днем {day['day_temp']}°C, ночью {day['night_temp']}°C\n")
+        f.write("\n")
+
+        f.write("ДАННЫЕ С ACCUWEATHER:\n")
+        for i, day in enumerate(accuweather_data[:7]):
+            f.write(f"День {i + 1}: {day['date']} - днем {day['day_temp']}°C, ночью {day['night_temp']}°C\n")
+        f.write("\n" + "=" * 80 + "\n\n")
+
+        f.write("ОБРАБОТАННЫЕ РЕЗУЛЬТАТЫ:\n")
         f.write("=" * 80 + "\n\n")
 
         for result in results:

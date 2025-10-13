@@ -366,7 +366,7 @@ def main():
     max_days = min(len(data) for data in all_data if data)
 
     if max_days == 0:
-        print("Не удалось получить данные с сайтов")
+        print("Не удается получить данные с сайтов")
         return
 
     average_temps = []
@@ -399,7 +399,7 @@ def main():
             })
 
     if not average_temps:
-        print("Не удалось вычислить средние температуры")
+        print("Не удается вычислить средние температуры")
         return
 
     coldest_day = min(average_temps, key=lambda x: x['original_day_temp'])
